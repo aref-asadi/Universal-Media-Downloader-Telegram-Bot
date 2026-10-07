@@ -89,7 +89,7 @@ def get_platform_from_url(url: str) -> Tuple[Platform, Optional[str]]:
         # Extract ID
         for pattern in MEDIA_ID_PATTERNS["twitter"]:
             if match := re.search(pattern, url_lower):
-                media_id = match.group(1) or match.group(2)
+                media_id = match.group(1)
                 if media_id:
                     return Platform.X, media_id
         return Platform.TWITTER, None

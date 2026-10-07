@@ -174,11 +174,11 @@ LOG_RETENTION_DAYS = 7
 # ==================== Identifier Patterns ====================
 # Media ID extraction patterns
 MEDIA_ID_PATTERNS = {
-    "youtube": r"v=([a-zA-Z0-9_-]{11})",
-    "instagram": r"instagram\.com/p/([^/]+)",
-    "twitter": r"twitter\.com/i/status/(\d+)|x\.com/i/status/(\d+)",
-    "reddit": r"reddit\.com/.*?/comments/([^/]+)|redd\.it/([^/]+)",
-    "facebook": r"fb\.watch/([a-zA-Z0-9_-]+)",
+    "youtube": [r"v=([a-zA-Z0-9_-]{11})"],
+    "instagram": [r"instagram\.com/p/([^/]+)"],
+    "twitter": [r"twitter\.com/.+/status/(\d+)", r"x\.com/.+/status/(\d+)"],
+    "reddit": [r"reddit\.com/.*?/comments/([^/]+)", r"redd\.it/([^/]+)"],
+    "facebook": [r"fb\.watch/([a-zA-Z0-9_-]+)"],
 }
 
 # ==================== File Size Conversion ====================
