@@ -80,7 +80,10 @@ async def main():
     dp.include_router(router)
 
     # Health check endpoint (Docker HEALTHCHECK curls /health)
-    health_port = int(os.getenv("HEALTH_PORT", os.getenv("PORT", "8082")))
+    # Always use a fixed internal port — never Render's PORT env var.
+    # Binding to PORT would make Render classify this worker as a Web Service
+    # and kill it after 15 min of HTTP inactivity on the free tier.
+    health_port = int(os.getenv("HEALTH_PORT", "8082"))
     health_runner = await _start_health_server(health_port)
     logger.info(f"Health check listening on 0.0.0.0:{health_port}/health")
 
