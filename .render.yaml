@@ -1,0 +1,23 @@
+services:
+  - type: worker
+    name: universal-media-downloader
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    branch: main
+    autoDeploy: true
+    envVars:
+      - key: RENDER
+        value: "true"
+      # Secrets — set these in the Render Dashboard (Environment tab), NOT here:
+      #   BOT_TOKEN   = your Telegram bot token from @BotFather
+      #   REDIS_URL   = Internal Redis URL (auto-provided if you attach Render Redis)
+      - key: MAX_FILE_SIZE_MB
+        value: "49"
+      - key: KEEP_ALIVE_ENABLED
+        value: "true"
+      - key: KEEP_ALIVE_INTERVAL
+        value: "300"
+      - key: LOG_LEVEL
+        value: "INFO"
