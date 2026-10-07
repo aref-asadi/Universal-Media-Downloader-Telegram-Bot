@@ -144,9 +144,16 @@ class Extractor:
             'ignoreerrors': False,
         }
 
-        # YouTube bot-check bypass: use Android client which doesn't require login
+        # YouTube bot-check bypass:
+        # tv_embedded works on datacenter IPs without cookies for most public videos.
+        # ios is a reliable fallback. android is last resort.
         if platform == P.YOUTUBE:
-            options['extractor_args'] = {'youtube': {'player_client': ['android']}}
+            options['extractor_args'] = {
+                'youtube': {
+                    'player_client': ['tv_embedded', 'ios', 'android'],
+                    'skip': ['hls', 'dash'],  # avoid formats that still require auth
+                }
+            }
 
         if self.config.twitter_proxy:
             options['proxy'] = self.config.twitter_proxy
