@@ -1,0 +1,8 @@
+[32m2026-10-07 17:13:35.815[0m | [1mINFO    [0m | [36m__main__[0m:[36mmain[0m:[36m60[0m | [1mUniversal Media Downloader Bot starting...[0m
+[32m2026-10-07 17:13:35.822[0m | [1mINFO    [0m | [36mstorage.cleanup[0m:[36mregister_all[0m:[36m91[0m | [1mCleanup handlers registered[0m
+[32m2026-10-07 17:13:35.823[0m | [1mINFO    [0m | [36mstorage.cleanup[0m:[36msetup_temp_dirs[0m:[36m27[0m | [1mTemp directories setup: /tmp/ubd[0m
+[32m2026-10-07 17:13:35.897[0m | [1mINFO    [0m | [36m__main__[0m:[36mmain[0m:[36m85[0m | [1mHealth check listening on 0.0.0.0:8082/health[0m
+[32m2026-10-07 17:13:36.439[0m | [1mINFO    [0m | [36mservices.heartbeat[0m:[36mstart[0m:[36m41[0m | [1mHeartbeat service started[0m
+Press Ctrl+C to stop...
+[32m2026-10-07 17:13:36.441[0m | [1mINFO    [0m | [36m__main__[0m:[36mmain[0m:[36m95[0m | [1mBot started! Polling as token id: 8858429423[0m
+Received SIGTERM signal

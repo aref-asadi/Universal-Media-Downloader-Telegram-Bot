@@ -18,8 +18,8 @@ def generate_help_text(config) -> str:
 <b>Commands:</b>
 /start   - Start the bot and show help
 /help    - Show this help message
-/download <URL> - Download media from URL
-/cancel <ID> - Cancel a download (not yet implemented)
+/download [URL] - Download media from URL
+/cancel [ID] - Cancel a download (not yet implemented)
 
 <b>Pricing:</b>
 Free 512MB Render Tier - 1 concurrent download
