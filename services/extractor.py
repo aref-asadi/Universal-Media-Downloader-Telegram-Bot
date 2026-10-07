@@ -85,22 +85,31 @@ class Extractor:
                 url='',
             )
 
-    def _get_format_string(self, config: 'PlatformConfig', url: str) -> str:
-        """Build format string based on quality settings."""
+    def _get_format_string(self, platform: 'Platform', url: str) -> str:
+        """Build format string based on quality settings and platform capabilities."""
+        from core.types import Platform as P
         quality = self.config.video_quality
         audio_only = self.config.audio_only
 
         if audio_only:
             return "bestaudio/best"
 
-        if quality == '1080p':
-            return "bestvideo[height<=1080]+bestaudio/best[height<=1080]"
-        if quality == '720p':
-            return "bestvideo[height<=720]+bestaudio/best[height<=720]"
-        if quality == '480p':
-            return "bestvideo[height<=480]+bestaudio/best[height<=480]"
+        # Height cap from quality setting
+        h = {"1080p": 1080, "720p": 720, "480p": 480, "360p": 360}.get(quality, 720)
 
-        return "bestvideo+bestaudio/best"
+        # Instagram only has pre-muxed streams — asking for separate video+audio
+        # streams always fails with "Requested format is not available".
+        if platform in (P.INSTAGRAM,):
+            return f"best[height<={h}]/best"
+
+        # Universal: prefer separate streams (better quality), fall back to
+        # muxed if the platform doesn't offer them (Twitter, Reddit, Facebook).
+        return (
+            f"bestvideo[height<={h}][ext=mp4]+bestaudio[ext=m4a]"
+            f"/bestvideo[height<={h}]+bestaudio"
+            f"/best[height<={h}]"
+            f"/best"
+        )
 
     def _cleanup_other_files(self, output_dir: str, media_id: str, kept_ext: str) -> None:
         """Remove other format files for the same media."""
@@ -113,8 +122,13 @@ class Extractor:
                     except:
                         pass
 
-    def _build_download_options(self, output_dir: str) -> dict:
+    def _build_download_options(self, output_dir: str, url: str = '') -> dict:
         """Build yt-dlp options for a download."""
+        from core.dia_config import get_platform_from_url
+        from core.types import Platform as P
+
+        platform, _ = get_platform_from_url(url) if url else (None, None)
+
         options = {
             'quiet': True,
             'no_warnings': True,
@@ -123,12 +137,17 @@ class Extractor:
             'nocheckcertificate': True,
             'retries': 3,
             'socket_timeout': 30,
-            'format': self._get_format_string(None, ''),
+            'format': self._get_format_string(platform, url),
             'outtmpl': os.path.join(output_dir, '%(title).80B [%(id)s].%(ext)s'),
             'merge_output_format': 'mp4' if not self.config.audio_only else 'm4a',
             'max_filesize': self.config.max_file_size_mb * 1024 * 1024,
             'ignoreerrors': False,
         }
+
+        # YouTube bot-check bypass: use Android client which doesn't require login
+        if platform == P.YOUTUBE:
+            options['extractor_args'] = {'youtube': {'player_client': ['android']}}
+
         if self.config.twitter_proxy:
             options['proxy'] = self.config.twitter_proxy
         if self.config.cookies_dir:
@@ -180,7 +199,7 @@ class Extractor:
             List of downloaded file paths (single item for regular videos).
         """
         os.makedirs(output_dir, exist_ok=True)
-        options = self._build_download_options(output_dir)
+        options = self._build_download_options(output_dir, url)
 
         def _run() -> dict:
             with yt_dlp.YoutubeDL(options) as ydl:
