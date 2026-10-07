@@ -63,7 +63,7 @@ async def download_command(message: Message, state: FSMContext):
     url = url_match.group(0).rstrip(").,]\"'")
 
     # Concurrency guard (per-user, tracked in FSM)
-    active_downloads = state.get_data().get("active_downloads", [])
+    active_downloads = (await state.get_data()).get("active_downloads", [])
     if len(active_downloads) >= MAX_ACTIVE_DOWNLOADS:
         await message.answer(
             "⚠️ You already have a download in progress. "
