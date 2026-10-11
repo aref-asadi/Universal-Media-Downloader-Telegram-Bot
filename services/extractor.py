@@ -169,10 +169,39 @@ class Extractor:
 
         if self.config.twitter_proxy:
             options['proxy'] = self.config.twitter_proxy
+        
+        # Instagram: ignore errors so carousel items that fail don't kill the whole playlist
+        # (image-only carousels often trigger "No video formats found" on some items)
+        if platform == P.INSTAGRAM:
+            options['ignoreerrors'] = True
+        
         if self.config.cookies_dir:
-            cookie_file = os.path.join(self.config.cookies_dir, "youtube_cookies.txt")
+            # Use platform-specific cookies
+            from core.constants import COOKIE_FILES
+            if platform and hasattr(platform, 'name'):
+                platform_name = platform.name.lower()
+            else:
+                platform_name = str(platform).lower() if platform else 'youtube'
+            
+            cookie_filename = COOKIE_FILES.get(platform_name, 'youtube_cookies.txt')
+            cookie_file = os.path.join(self.config.cookies_dir, cookie_filename)
+            
+            # Fallback to youtube cookies if platform-specific not found
+            if not os.path.exists(cookie_file) and platform_name != 'youtube':
+                cookie_file = os.path.join(self.config.cookies_dir, 'youtube_cookies.txt')
+            
             if os.path.exists(cookie_file):
                 options['cookies'] = cookie_file
+        
+        # Instagram extractor args - use app ID and web API for better format access
+        if platform == P.INSTAGRAM:
+            options['extractor_args'] = {
+                'instagram': {
+                    'app_id': ['936619743392459'],
+                    'api-version': ['web'],
+                }
+            }
+        
         return options
 
     def _resolve_filepaths(self, output_dir: str, info: dict) -> List[str]:
@@ -242,14 +271,29 @@ class Extractor:
             # Max 10 items - Instagram carousel limit
             max_items = 10
             filepaths = set()
-            for i in range(min(len(info['entries']), max_items)):
-                entry = info['entries'][i]
+            entries = info.get('entries', [])
+            
+            for i in range(min(len(entries), max_items)):
+                entry = entries[i]
                 if not entry:
+                    # Failed extraction (ignoreerrors=True, image-only item, etc.) - skip
                     continue
                 entry_files = self._resolve_filepaths(output_dir, entry)
                 filepaths.update(entry_files)
+            
             if filepaths:
                 return list(filepaths)
+            
+            # If all entries failed but we still have files in the directory, return those
+            # (the download may have succeeded even if entry metadata extraction failed)
+            candidate_files = [
+                os.path.join(output_dir, f)
+                for f in os.listdir(output_dir)
+                if os.path.isfile(os.path.join(output_dir, f))
+                and not f.endswith(('.part', '.ytdl', '.json'))
+            ]
+            if candidate_files:
+                return candidate_files
 
         filepaths = self._resolve_filepaths(output_dir, info)
         if not filepaths:
