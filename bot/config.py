@@ -58,6 +58,9 @@ class BotSettings(BaseSettings):
     download_dir: Optional[str] = Field(default=None)
     log_dir: str = Field(default="/tmp/ubd/logs")
     
+    cobalt_api_url: str = Field(default="")
+    cobalt_api_key: str = Field(default="")
+    
     health_check_disk_gb: int = Field(default=10)
     health_check_interval_minutes: int = Field(default=15)
     health_check_enabled: bool = Field(default=True)

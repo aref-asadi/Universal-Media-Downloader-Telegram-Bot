@@ -5,6 +5,8 @@ media info and download media from various platforms.
 """
 import asyncio
 import os
+import re
+import aiohttp
 from typing import Optional, List, Dict
 
 import yt_dlp
@@ -22,6 +24,104 @@ class Extractor:
     def __init__(self, config):
         self.config = config
         self._yt_dlp_instance: Optional['yt_dlp.YoutubeDL'] = None
+
+    async def _fetch_cobalt_instagram(self, url: str, output_dir: str) -> List[str]:
+        """Fetch Instagram media via Cobalt API (handles anti-bot protections).
+        
+        Returns list of downloaded file paths, or empty list if failed.
+        """
+        cobalt_url = getattr(self.config, 'cobalt_api_url', '')
+        if not cobalt_url:
+            return []
+        
+        cobalt_key = getattr(self.config, 'cobalt_api_key', '')
+        
+        headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+        }
+        if cobalt_key:
+            headers['Authorization'] = f'Apikey {cobalt_key}'
+        
+        payload = {
+            'url': url,
+            'videoQuality': '720',
+            'downloadMode': 'auto',
+            'alwaysProxy': True,
+            'localProcessing': 'disabled',
+        }
+        
+        try:
+            timeout = aiohttp.ClientTimeout(total=30)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(cobalt_url, json=payload, headers=headers) as resp:
+                    if resp.status != 200:
+                        logger.warning(f"Cobalt API returned {resp.status}")
+                        return []
+                    
+                    data = await resp.json()
+                    logger.info(f"Cobalt response status: {data.get('status')}")
+                    
+                    # Parse response based on status
+                    status = data.get('status')
+                    media_urls = []
+                    
+                    if status in ('tunnel', 'redirect'):
+                        media_url = data.get('url')
+                        if media_url:
+                            media_urls.append((media_url, data.get('filename', '')))
+                    
+                    elif status == 'picker':
+                        picker = data.get('picker', [])
+                        for item in picker:
+                            if isinstance(item, dict) and item.get('url'):
+                                media_urls.append((item['url'], item.get('filename', '')))
+                    
+                    elif status == 'local-processing':
+                        # For local-processing, we get tunnel URLs
+                        tunnels = data.get('tunnel', [])
+                        output = data.get('output', {})
+                        for tunnel_url in tunnels:
+                            if tunnel_url:
+                                media_urls.append((tunnel_url, output.get('filename', '')))
+                    
+                    if not media_urls:
+                        logger.warning("Cobalt returned no media URLs")
+                        return []
+                    
+                    # Download each media URL
+                    downloaded_files = []
+                    for i, (media_url, filename) in enumerate(media_urls[:10]):  # Max 10 items
+                        if not filename:
+                            # Generate filename from URL
+                            from urllib.parse import urlparse, unquote
+                            parsed = urlparse(media_url)
+                            filename = unquote(parsed.path.split('/')[-1])
+                            if not filename or '.' not in filename:
+                                filename = f"instagram_{i+1}.mp4"
+                        
+                        filepath = os.path.join(output_dir, filename)
+                        
+                        try:
+                            async with session.get(media_url) as download_resp:
+                                if download_resp.status == 200:
+                                    with open(filepath, 'wb') as f:
+                                        async for chunk in download_resp.content.iter_chunked(8192):
+                                            f.write(chunk)
+                                    
+                                    if os.path.exists(filepath) and os.path.getsize(filepath) > 0:
+                                        downloaded_files.append(filepath)
+                                        logger.info(f"Downloaded via Cobalt: {filename}")
+                                else:
+                                    logger.warning(f"Failed to download {filename}: HTTP {download_resp.status}")
+                        except Exception as e:
+                            logger.error(f"Download error for {filename}: {e}")
+                    
+                    return downloaded_files
+                    
+        except Exception as e:
+            logger.error(f"Cobalt API error: {e}")
+            return []
 
     @property
     def _yt_dlp(self) -> 'yt_dlp.YoutubeDL':
@@ -246,6 +346,35 @@ class Extractor:
             List of downloaded file paths (single item for regular videos).
         """
         os.makedirs(output_dir, exist_ok=True)
+        
+        # For Instagram, try yt-dlp first, then fall back to Cobalt API
+        from core.types import Platform as P
+        platform, _ = get_platform_from_url(url)
+        
+        if platform == P.INSTAGRAM:
+            try:
+                result = await self._download_via_ytdlp(url, output_dir)
+                if result:
+                    return result
+            except Exception as e:
+                logger.warning(f"yt-dlp failed for Instagram, trying Cobalt API: {e}")
+            
+            # Fall back to Cobalt API
+            cobalt_result = await self._fetch_cobalt_instagram(url, output_dir)
+            if cobalt_result:
+                logger.info(f"Instagram download via Cobalt: {len(cobalt_result)} files")
+                return cobalt_result
+            
+            raise DownloadError(
+                "Instagram download failed. yt-dlp blocked by Instagram and no Cobalt API configured. "
+                "Set COBALT_API_URL to enable Instagram downloads."
+            )
+        
+        # For other platforms, use yt-dlp directly
+        return await self._download_via_ytdlp(url, output_dir)
+
+    async def _download_via_ytdlp(self, url: str, output_dir: str) -> List[str]:
+        """Download using yt-dlp (blocking, run in thread)."""
         options = self._build_download_options(output_dir, url)
 
         def _run() -> dict:
