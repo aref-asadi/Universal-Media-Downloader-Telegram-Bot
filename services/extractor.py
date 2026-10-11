@@ -295,6 +295,12 @@ class Extractor:
             if candidate_files:
                 return candidate_files
 
+            raise DownloadError(
+                "Instagram returned no downloadable items. "
+                "Instagram often blocks requests from datacenter IPs — "
+                "try again later or provide Instagram cookies."
+            )
+
         filepaths = self._resolve_filepaths(output_dir, info)
         if not filepaths:
             raise DownloadError("Download finished but no file was produced")
