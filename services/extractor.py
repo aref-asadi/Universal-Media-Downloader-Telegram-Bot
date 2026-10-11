@@ -1,7 +1,8 @@
-"""""""""Media extraction service using yt-dlp wrapper.
+"""Media extraction service using yt-dlp wrapper.
 
-RESOLVING FILEPATHS
-""""""""""""
+This module provides the Extractor class which uses yt-dlp to extract
+media info and download media from various platforms.
+"""
 import asyncio
 import os
 from typing import Optional, List, Dict
@@ -249,7 +250,6 @@ class Extractor:
                 filepaths.update(entry_files)
             if filepaths:
                 return list(filepaths)
-        raise DownloadError("No downloadable entries found")
 
         filepaths = self._resolve_filepaths(output_dir, info)
         if not filepaths:
