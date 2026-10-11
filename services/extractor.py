@@ -1,4 +1,7 @@
-"""Media extraction service using yt-dlp wrapper."""
+"""""""""Media extraction service using yt-dlp wrapper.
+
+RESOLVING FILEPATHS
+""""""""""""
 import asyncio
 import os
 from typing import Optional, List, Dict
@@ -99,8 +102,10 @@ class Extractor:
 
         # Instagram only has pre-muxed streams — asking for separate video+audio
         # streams always fails with "Requested format is not available".
+        # Use bare "best" so yt-dlp picks whatever format the item has
+        # (video, image, or audio) — carousels can mix all three.
         if platform in (P.INSTAGRAM,):
-            return f"best[height<={h}]/best"
+            return "best"
 
         # Universal: prefer separate streams (better quality), fall back to
         # muxed if the platform doesn't offer them (Twitter, Reddit, Facebook).
@@ -133,7 +138,6 @@ class Extractor:
             'quiet': True,
             'no_warnings': True,
             'noprogress': True,
-            'noplaylist': True,
             'nocheckcertificate': True,
             'retries': 3,
             'socket_timeout': 30,
@@ -143,6 +147,13 @@ class Extractor:
             'max_filesize': self.config.max_file_size_mb * 1024 * 1024,
             'ignoreerrors': False,
         }
+
+        # Instagram galleries use playlist internally — allow it to download all post items
+        # (photo/video carousels can have up to 10 items). Don't use playlistend.
+        if platform == P.INSTAGRAM:
+            options['noplaylist'] = False
+        else:
+            options['noplaylist'] = True
 
         # YouTube bot-check bypass:
         # tv_embedded works on datacenter IPs without cookies for most public videos.
@@ -163,8 +174,7 @@ class Extractor:
                 options['cookies'] = cookie_file
         return options
 
-    @staticmethod
-    def _resolve_filepaths(output_dir: str, info: dict) -> List[str]:
+    def _resolve_filepaths(self, output_dir: str, info: dict) -> List[str]:
         """Resolve final file paths from yt-dlp info dict."""
         paths: List[str] = []
         requested = info.get('requested_downloads') or []
@@ -185,12 +195,12 @@ class Extractor:
             pass
 
         if not paths:
-            # Last resort: newest file in output dir
+            # Last resort: newly created files (exclude temp files, keep images)
             candidates = [
                 os.path.join(output_dir, f)
                 for f in os.listdir(output_dir)
                 if os.path.isfile(os.path.join(output_dir, f))
-                and not f.endswith(('.part', '.ytdl', '.json', '.jpg', '.png', '.webp'))
+                and not f.endswith(('.part', '.ytdl', '.json', '.m4a'))
             ]
             candidates.sort(key=os.path.getmtime, reverse=True)
             paths = candidates[:1]
@@ -224,12 +234,22 @@ class Extractor:
         if info is None:
             raise DownloadError("yt-dlp returned no data")
 
-        # Playlist/nested entries (shouldn't happen with noplaylist, but be safe)
+        # Playlist/entries handling (for Instagram carousels, Reddit galleries)
+        # YouTube is still noplaylist due to potential long playlist downloads.
         if 'entries' in info:
-            entries = [e for e in info['entries'] if e]
-            if not entries:
-                raise DownloadError("No downloadable entries found")
-            info = entries[0]
+            # Only one URL was requested (`url` param), so this should be a single carousel/gallery
+            # Max 10 items - Instagram carousel limit
+            max_items = 10
+            filepaths = set()
+            for i in range(min(len(info['entries']), max_items)):
+                entry = info['entries'][i]
+                if not entry:
+                    continue
+                entry_files = self._resolve_filepaths(output_dir, entry)
+                filepaths.update(entry_files)
+            if filepaths:
+                return list(filepaths)
+        raise DownloadError("No downloadable entries found")
 
         filepaths = self._resolve_filepaths(output_dir, info)
         if not filepaths:
